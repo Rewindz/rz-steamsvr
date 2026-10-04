@@ -1,6 +1,15 @@
+#include <chrono>
 #include <cstdlib>
+#include <expected>
 #include <filesystem>
 #include <string>
+#include <thread>
+#include <stop_token>
+#include <atomic>
+#include <csignal>
+
+#include <poll.h>
+
 #include <rz/rzutils.hpp>
 
 #include <spdlog/spdlog.h>
@@ -15,8 +24,18 @@
 #include "socketfd.hpp"
 #include "ipc.hpp"
 #include "luapi.hpp"
+#include "spdlog/common.h"
 
 using AppSettingsFile = rz::json::Saveable<AppSettings>;
+
+std::atomic<bool> g_running {true};
+
+void signal_handler(int signal)
+{
+    if(signal == SIGINT) {
+        g_running = false;
+    }
+}
 
 inline void LoadConfig(AppSettingsFile& config)
 {
@@ -29,6 +48,12 @@ inline void LoadConfig(AppSettingsFile& config)
 
 int main(void)
 {
+
+    std::signal(SIGINT, signal_handler);
+
+    spdlog::set_level(spdlog::level::debug);
+    spdlog::flush_on(spdlog::level::debug);
+
 
     auto appPath = rz::fs::GetAppConfigPath("rzsvr");
     std::filesystem::path configPath{};
@@ -74,22 +99,40 @@ int main(void)
         { IPCAction::CMD, [](const auto& args){ return std::unexpected{"TODO"}; } },
     }};
 
-    // probably use poll here later
-    while(true)
-    {
-        SocketFd clientFd{accept(serverFd.get(), nullptr, nullptr)};
-        if(!clientFd.is_valid()) continue;
-        std::array<char, 1024> buffer{};
-        ssize_t bytesRead = recv(clientFd.get(), buffer.data(), buffer.size(), 0);
-        if(bytesRead > 0) {
-            std::string_view msg {buffer.data(), static_cast<size_t>(bytesRead)};
-            spdlog::debug("Message received: {}", msg);
+    IPCQueue<IPCRequest> ipcQueue;
 
-            auto reply = nlohmann::json{dispatcher.dispatch(msg)}.dump(APPSETTINGS_INDENT);
-            send(clientFd.get(), reply.data(), reply.size(), 0);
+    std::jthread net_worker ([&serverFd, &ipcQueue](std::stop_token stoken) {
+        pollfd pfd {.fd = serverFd.get(), .events = POLLIN, .revents = 0};
+        while(!stoken.stop_requested()) {
+            int ret = poll(&pfd, 1, 100);
+            if(ret > 0 && (pfd.revents & POLLIN)) {
+                SocketFd clientFd {accept(serverFd.get(), nullptr, nullptr)};
+                if(!clientFd.is_valid()) continue;
+                std::array<char, 1024> buf{};
+                ssize_t bytesRead = recv(clientFd.get(), buf.data(), buf.size(), 0);
+                if(bytesRead > 0) {
+                    ipcQueue.push(IPCRequest{
+                       .clientFd {std::move(clientFd)},
+                       .request {std::string(buf.data(), static_cast<size_t>(bytesRead))},
+                    });
+                }
+            }
         }
+        spdlog::debug("Net worker exited.");
+    });
+
+    while(g_running.load(std::memory_order::relaxed))
+    {
+        while(auto req = ipcQueue.try_pop()) {
+            spdlog::debug("Processing queued request: {}", req->request);
+            nlohmann::json reply = dispatcher.dispatch(req->request);
+            std::string r = reply.dump(APPSETTINGS_INDENT);
+            send(req->clientFd.get(), r.data(), r.size(), 0);
+        }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-
+    spdlog::info("Shutting down..");
     return 0;
 }

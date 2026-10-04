@@ -19,6 +19,8 @@ int main(int argc, char** argv)
 
     spdlog::set_pattern("[%^%l%$] %v");
 
+    spdlog::set_level(spdlog::level::debug);
+
 
     program.add_argument("-i", "--init")
         .flag()
@@ -169,8 +171,7 @@ int main(int argc, char** argv)
         IPCMessage msg {
           .action = IPCAction::STOP,
         };
-
-        std::string cmd = nlohmann::json{msg}.dump();
+        std::string cmd = nlohmann::json(msg).dump();
 
         if(send(client.get(), cmd.data(), cmd.size(), 0) == -1) {
             spdlog::error("Failed to send command!");

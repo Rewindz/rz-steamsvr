@@ -5,10 +5,15 @@
 #include <string_view>
 #include <format>
 #include <expected>
+#include <queue>
+#include <mutex>
+#include <utility>
+#include <optional>
 
 #include <nlohmann/json.hpp>
 
 #include "ipc.hpp"
+#include "socketfd.hpp"
 
 class IPCDispatcher
 {
@@ -68,4 +73,36 @@ class IPCDispatcher
 
 
          RouteMap m_routes;
+};
+
+struct IPCRequest
+{
+    SocketFd clientFd;
+    std::string request;
+};
+
+template <typename T>
+class IPCQueue
+{
+    public:
+
+        void push(T item)
+        {
+            std::scoped_lock lock(m_mutex);
+            m_queue.push(std::move(item));
+        }
+
+        std::optional<T> try_pop()
+        {
+            std::scoped_lock lock(m_mutex);
+            if(m_queue.empty())
+                return std::nullopt;
+            T item = std::move(m_queue.front());
+            m_queue.pop();
+            return item;
+        }
+
+    private:
+        std::queue<T> m_queue;
+        mutable std::mutex m_mutex;
 };
