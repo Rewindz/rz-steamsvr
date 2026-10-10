@@ -8,6 +8,7 @@
 
 #include <rz/rzutils.hpp>
 
+#include "rz/defs/defs.hpp"
 #include "settings.hpp"
 #include "steamcmd.hpp"
 #include "ipc.hpp"
@@ -25,6 +26,10 @@ int main(int argc, char** argv)
     program.add_argument("-i", "--init")
         .flag()
         .help("initialize the configuration");
+
+    program.add_argument("--launch-path")
+        .flag()
+        .help("set the app's launch path (relative to the install dir)");
 
     program.add_argument("--config")
         .flag()
@@ -108,6 +113,9 @@ int main(int argc, char** argv)
             spdlog::info("steamcmd initialization success! Install/update the server app with --update");
         }
 
+        spdlog::warn("Please remember to set the launch path if not using custom lua actions.");
+        spdlog::warn("Use --launch-path to set the launch path");
+
         return 0;
     }
 
@@ -152,6 +160,23 @@ int main(int argc, char** argv)
         } else {
             spdlog::error("Failed to update {}!", appSettings->app_id);
             return 1;
+        }
+    }
+
+    if(program["--launch-path"] == true) {
+        std::printf("Launch path: ");
+        std::getline(std::cin, appSettings->launch_path);
+        using std::filesystem::path;
+        path i{appSettings->install_dir};
+        path l{appSettings->launch_path};
+        spdlog::info("Launch path: {}", (i / l).string());
+
+        if(appSettings.Save() == rz::STATUS::RZ_ERROR) {
+            spdlog::error("Failed to save config with new launch path");
+            return 1;
+        } else {
+            spdlog::info("Launch path saved successfully");
+            return 0;
         }
     }
 

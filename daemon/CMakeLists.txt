@@ -9,7 +9,13 @@ list(TRANSFORM DAEMON_SRC PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/")
 
 add_executable(rzdaemon)
 
-target_compile_features(rzdaemon PRIVATE cxx_std_23)
+set_target_properties(rzdaemon PROPERTIES
+  CMAKE_CXX_STANDARD 2C
+  CMAKE_CXX_STANDARD_REQUIRED ON
+)
+
+target_compile_options(rzdaemon PRIVATE -std=gnu++2c -freflection
+-static-libstdc++ -static-libgcc)
 
 target_sources(rzdaemon PRIVATE ${DAEMON_SRC})
 

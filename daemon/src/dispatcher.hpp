@@ -18,7 +18,8 @@
 class IPCDispatcher
 {
     public:
-        using Handler = std::function<std::expected<nlohmann::json, std::string>(const nlohmann::json&)>;
+        using HandlerReturn = std::expected<nlohmann::json, std::string>;
+        using Handler = std::function<HandlerReturn(const nlohmann::json&)>;
         using RouteMap = std::unordered_map<IPCAction, Handler>;
 
         IPCDispatcher(RouteMap&& routes)
