@@ -208,7 +208,7 @@ int main(int argc, char** argv)
 
         nlohmann::json args = nlohmann::json::object();
         args["args"] = startArgs;
-        args["retart"] = force;
+        args["restart"] = force;
         IPCMessage msg {
             .action = IPCAction::RUN,
             .args = args
