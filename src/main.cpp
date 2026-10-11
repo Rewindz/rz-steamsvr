@@ -12,7 +12,9 @@
 #include "settings.hpp"
 #include "steamcmd.hpp"
 #include "ipc.hpp"
-#include "socketfd.hpp"
+#include "message.hpp"
+
+
 
 int main(int argc, char** argv)
 {
@@ -42,6 +44,18 @@ int main(int argc, char** argv)
     program.add_argument("--stop")
         .flag()
         .help("stop the app");
+
+    program.add_argument("--start")
+        .nargs(argparse::nargs_pattern::any)
+        .help("start the app (e.g. --start -- arg1 arg2)");
+
+    program.add_argument("-c", "--command")
+        .nargs(argparse::nargs_pattern::at_least_one)
+        .help("send custom command to the lua engine (e.g. --command -- lua_function_name arg1 arg2)");
+
+    program.add_argument("-f", "--force")
+        .flag()
+        .help("force flag for actions like start, stop");
 
     try {
         program.parse_args(argc, argv);
@@ -181,52 +195,43 @@ int main(int argc, char** argv)
     }
 
     if(program["--stop"] == true) {
-        SocketFd client {SocketFd::GetSocket()};
-        if(!client.is_valid()) {
-            spdlog::error("Failed to create socket for IPC");
-            return 1;
-        }
-        auto [addr, addr_len] = SocketFd::MakeAddr(SOCKET_NAME);
-
-        if(connect(client.get(), reinterpret_cast<sockaddr*>(&addr), addr_len) == -1) {
-            spdlog::error("Failed to connect. Is the daemon running?");
-            return 1;
-        }
-
         IPCMessage msg {
           .action = IPCAction::STOP,
         };
-        std::string cmd = nlohmann::json(msg).dump();
+        return sendMessage(msg);
+    }
 
-        if(send(client.get(), cmd.data(), cmd.size(), 0) == -1) {
-            spdlog::error("Failed to send command!");
-            spdlog::debug("Failed command: {}", cmd);
-            return 1;
-        }
+    if(program.is_used("--start")) {
+        bool force = program.is_used("--force");
 
-        // read reply
-        std::array<char, 1024> buffer;
-        ssize_t bytesRead = recv(client.get(), buffer.data(), buffer.size(), 0);
-        if(bytesRead <= 0) {
-            spdlog::error("Daemon did not reply.");
-            return 1;
-        }
+        auto startArgs = program.get<std::vector<std::string>>("--start");
 
-        try {
-            std::string_view bufView{buffer.data(), static_cast<size_t>(bytesRead)};
-            IPCReply reply = nlohmann::json::parse(bufView).get<IPCReply>();
-            if(reply.status == IPCStatus::ERROR) {
-                spdlog::error("Daemon returned an error:\n {}", reply.data.dump(4));
-                return 1;
-            } else {
-                spdlog::info("Success!");
-                spdlog::debug("Daemon returned:\n {}", reply.data.dump(4));
-                return 0;
-            }
-        } catch (const nlohmann::json::exception& e) {
-            spdlog::error("Failed to parse reply: {}", e.what());
-            return 1;
-        }
+        nlohmann::json args = nlohmann::json::object();
+        args["args"] = startArgs;
+        args["retart"] = force;
+        IPCMessage msg {
+            .action = IPCAction::RUN,
+            .args = args
+        };
+
+        return sendMessage(msg);
+    }
+
+    if(program.is_used("--command")) {
+
+        auto cmdArgs = program.get<std::vector<std::string>>("--command");
+
+        std::string_view func = cmdArgs.front();
+        std::span<std::string> funcArgs{cmdArgs.begin() + 1, cmdArgs.end()};
+        nlohmann::json args = nlohmann::json::object();
+        args["func"] = func;
+        args["args"] = funcArgs;
+
+        IPCMessage msg {
+            .action = IPCAction::CMD,
+            .args = args
+        };
+        return sendMessage(msg);
     }
 
     return 0;

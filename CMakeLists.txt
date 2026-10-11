@@ -52,6 +52,7 @@ target_include_directories(lua PUBLIC "${luadl_SOURCE_DIR}/src")
 set(PROJ_SRC
   "main.cpp"
   "steamcmd.cpp"
+  "message.cpp"
 )
 
 list(TRANSFORM PROJ_SRC PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/src/")
