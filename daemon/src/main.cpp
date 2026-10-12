@@ -21,8 +21,6 @@
 #include <sys/types.h>
 
 #include "dispatcher.hpp"
-#include "lua.h"
-#include "rz/fs/fs.hpp"
 #include "settings.hpp"
 #include "socketfd.hpp"
 #include "ipc.hpp"
@@ -55,6 +53,7 @@ int main(void)
     std::signal(SIGINT, signal_handler);
     std::signal(SIGPIPE, SIG_IGN);
 
+    spdlog::set_pattern("[%x] [%X] [%^%l%$] %v");
     spdlog::set_level(spdlog::level::debug);
     spdlog::flush_on(spdlog::level::debug);
 
@@ -122,12 +121,12 @@ int main(void)
         auto cmdArgs = args["args"].get<std::vector<std::string>>();
         if(appConfig->install_dir.empty()) {
             if(auto home = rz::fs::GetHomePath(); home.has_value()) {
-                res = process->spawn( (*home / "Steam" / "steamapps" / "common" / l).native_encoded_string(), cmdArgs );
+                res = process->spawn( (*home / "Steam" / "steamapps" / "common" / l).string(), cmdArgs );
             } else {
                 return std::unexpected{"Failed to get home directory env variable."};
             }
         } else {
-            res = process->spawn((l / appConfig->launch_path).native_encoded_string(), cmdArgs);
+            res = process->spawn((l / appConfig->launch_path).string(), cmdArgs);
         }
 
         if(res) {

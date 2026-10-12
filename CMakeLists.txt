@@ -61,7 +61,10 @@ add_executable(rzsvr)
 
 target_sources(rzsvr PRIVATE ${PROJ_SRC})
 
-target_compile_features(rzsvr PRIVATE cxx_std_23)
+set_target_properties(rzsvr PROPERTIES
+  CMAKE_CXX_STANDARD 23
+  CMAKE_CXX_STANDARD_REQUIRED ON
+)
 
 target_link_libraries(rzsvr PRIVATE
   rzutils

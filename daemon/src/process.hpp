@@ -121,8 +121,12 @@ class ChildProcess
 
         void terminate()
         {
-            if (m_pid > 0)
+            if (m_pid > 0) {
                 kill(m_pid, SIGTERM);
+                int status{0};
+                waitpid(m_pid, &status, 0);
+                m_pid = -1;
+            }
         }
 
         auto getExectuable() const

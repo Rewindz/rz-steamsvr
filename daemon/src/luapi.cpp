@@ -29,7 +29,7 @@ constexpr auto bind_member(lua_State* L)
 {
     if constexpr (!is_special_member_function(Member)) {
         lua_pushcfunction(L, &[:Member:]);
-        std::string name(display_string_of(Member));
+        std::string name(std::meta::identifier_of(Member));
         lua_setglobal(L, name.c_str());
     }
 }

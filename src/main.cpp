@@ -10,6 +10,7 @@
 
 #include "rz/defs/defs.hpp"
 #include "settings.hpp"
+#include "spdlog/common.h"
 #include "steamcmd.hpp"
 #include "ipc.hpp"
 #include "message.hpp"
@@ -22,7 +23,7 @@ int main(int argc, char** argv)
 
     spdlog::set_pattern("[%^%l%$] %v");
 
-    spdlog::set_level(spdlog::level::debug);
+    spdlog::set_level(spdlog::level::info);
 
 
     program.add_argument("-i", "--init")
@@ -49,6 +50,10 @@ int main(int argc, char** argv)
         .nargs(argparse::nargs_pattern::any)
         .help("start the app (e.g. --start -- arg1 arg2)");
 
+    program.add_argument("--status")
+        .flag()
+        .help("request and print the status of the app");
+
     program.add_argument("-c", "--command")
         .nargs(argparse::nargs_pattern::at_least_one)
         .help("send custom command to the lua engine (e.g. --command -- lua_function_name arg1 arg2)");
@@ -57,11 +62,19 @@ int main(int argc, char** argv)
         .flag()
         .help("force flag for actions like start, stop");
 
+    program.add_argument("-v", "--verbose")
+        .flag()
+        .help("verbose prints (debug)");
+
     try {
         program.parse_args(argc, argv);
     } catch (const std::exception& e) {
         spdlog::error("{}\n{}", e.what(), program.help().str());
         return 1;
+    }
+
+    if(program.is_used("--verbose")) {
+        spdlog::set_level(spdlog::level::debug);
     }
 
     auto appPath = rz::fs::GetAppConfigPath("rzsvr");
@@ -214,6 +227,13 @@ int main(int argc, char** argv)
             .args = args
         };
 
+        return sendMessage(msg);
+    }
+
+    if(program["--status"] == true) {
+        IPCMessage msg {
+            .action = IPCAction::STATUS
+        };
         return sendMessage(msg);
     }
 
